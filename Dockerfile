@@ -1,9 +1,10 @@
-FROM node:22-bookworm-slim
+FROM python:3.12-slim
 WORKDIR /app
-COPY package.json ./
-RUN npm install --no-audit --no-fund
-COPY public ./public
-COPY src ./src
-COPY wrangler.docker.jsonc ./wrangler.docker.jsonc
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY streamlit_app.py .
+COPY .streamlit .streamlit
+RUN mkdir -p /data
+ENV VOICEBRIDGE_DB=/data/voicebridge.sqlite
 EXPOSE 3000
-CMD ["./node_modules/.bin/wrangler","dev","--config","wrangler.docker.jsonc","--local","--ip","0.0.0.0","--port","3000","--persist-to","/data"]
+CMD ["streamlit","run","streamlit_app.py","--server.address=0.0.0.0","--server.port=3000","--server.headless=true"]
