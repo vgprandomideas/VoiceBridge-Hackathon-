@@ -263,19 +263,8 @@ st.subheader("What would you like to say?")
 st.markdown("**Choose your communication method**")
 method=st.radio("Input method",["Type a message","Dictate with Wispr Flow","Record original voice"],horizontal=False,key="input_method")
 if method=="Dictate with Wispr Flow":
-    device=st.selectbox("Your device",["Android","iPhone / iPad","Windows","Mac","Other"])
-    st.caption("Use Wispr Flow if available for your device. VoiceBridge cannot automatically detect native app installation.")
-    with st.expander("Test Wispr Flow readiness",expanded=not st.session_state.get("flow_confirmed",False)):
-        st.link_button("Get Wispr Flow / check device support","https://wisprflow.ai/")
-        sample=st.text_input("Activate Wispr Flow and dictate a test sentence",key="flow_test")
-        confirmed=st.checkbox("I used Wispr Flow to dictate the test sentence",key="flow_self_report")
-        if st.button("Confirm dictation test"):
-            st.session_state.flow_confirmed=bool(sample.strip() and confirmed)
-        if st.session_state.get("flow_confirmed"):
-            st.success("Dictation test confirmed by you.")
-        else:
-            st.caption("Installation and dictation not independently verified.")
-    st.caption("If Wispr Flow is unavailable, use your device keyboard dictation or original voice recording.")
+    st.link_button("Open Wispr Flow","https://wisprflow.ai/",use_container_width=True)
+    st.caption("Activate Wispr Flow on your device, select the message box and dictate.")
 st.write("Tap the message box, activate Wispr Flow on your device and speak at your own pace. Review your words before sending.")
 with st.expander("How to use Wispr Flow"):
     st.write("1. Install and enable Wispr Flow on a supported device.\n\n2. Select the message box below.\n\n3. Activate Flow using your configured shortcut or supported keyboard.\n\n4. Finish dictating, review the text and tap Send message.")
