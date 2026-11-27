@@ -153,6 +153,12 @@ def conversation():
                         con.execute("UPDATE messages SET status='Acknowledged' WHERE id=? AND rid=?",(mid,rid))
                     st.rerun(scope="fragment")
 st.subheader("What would you like to say?")
+st.markdown("**Speak with Wispr Flow**")
+st.write("Tap the message box, activate Wispr Flow on your device and speak at your own pace. Review your words before sending.")
+with st.expander("How to use Wispr Flow"):
+    st.write("1. Install and enable Wispr Flow on a supported device.\n\n2. Select the message box below.\n\n3. Activate Flow using your configured shortcut or supported keyboard.\n\n4. Finish dictating, review the text and tap Send message.")
+    st.link_button("Get Wispr Flow","https://wisprflow.ai/")
+    st.caption("VoiceBridge receives text through device-level dictation. No direct Wispr API connection is used. If Flow is unavailable, type or select a quick phrase.")
 draft_key="draft_"+rid
 if st.session_state.pop("clear_draft_"+rid,False):
     st.session_state[draft_key]=""
@@ -162,7 +168,7 @@ for i,phrase in enumerate(phrases):
         cols=st.columns(2)
     if cols[i%2].button(phrase,use_container_width=True):
         st.session_state[draft_key]=phrase
-body=st.text_area("Write your message or dictate using Wispr Flow.",key=draft_key,max_chars=700)
+body=st.text_area("Message — type or dictate with Wispr Flow",key=draft_key,max_chars=700)
 if st.button("Send message",type="primary",use_container_width=True) and body.strip():
     with db() as con:
         con.execute("INSERT INTO messages (rid,sender,body) VALUES (?,?,?)",(rid,sender,body.strip()))
