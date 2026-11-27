@@ -1,18 +1,15 @@
-# VoiceBridge — Scaler × Wispr Flow prototype
+# VoiceBridge — Hackathon prototype
 
-Accessible private communication for residents and caregivers in India.
+Primary submission: Streamlit edition. Live demo: https://voicebridgesolutions.streamlit.app/
 
-## Run
-Install Docker with Compose, clone this repository, then run `docker compose up` and open http://localhost:3000. No secret keys or .env file are needed. Initial image and npm downloads require internet.
+## Run locally
+`docker compose up --build` then open http://localhost:3000. No secrets or .env required. Initial dependency downloads need internet.
 
 ## Demo
-Open /care.html, create a care group, add a resident, open the invitation in a second browser, send a request, play it aloud and reply. Use synthetic data. Wispr Flow can dictate into editable fields using its separately installed device controls. Browser speech recognition and playback depend on browser support, permissions and available voices. Cloudflare AI translation and server transcription are disabled locally; use original text or typing. This is not an emergency or clinical system.
+Choose caregiver, create a group, add a resident, copy their private code. In a separate browser session choose assistance and connect with that code. Select a quick request, review and send. Caregiver reads, listens, acknowledges and replies. Use Wispr Flow device dictation in the message field. Browser playback depends on device support. Use synthetic data only; not an emergency service.
 
-## Dependencies
-Node 22, Wrangler 4, local Durable Objects, browser speech APIs. No required environment variables. Optional cloud AI is not configured in this edition. Data persists in a local Docker volume.
-
-## Tests
-`node --test tests/care-group.test.mjs`. CI also attempts Docker startup and health checks. Check actual CI results before claiming a pass.
+## Dependencies and limitations
+Python, Streamlit, SQLite, browser speech synthesis. No paid API required. Typing and quick phrases remain available if speech playback fails. No automatic transcription or translation in this edition. Cloud storage may reset. Access codes are bearer credentials; keep private. Legacy JavaScript source remains in this repository but is not the primary Docker entrypoint.
 
 ## Provenance
-This edition imports the existing VoiceBridge prototype developed for the hackathon activities and adds local Docker packaging. Earlier development history remains in the original private repository. Eligibility and originality are subject to organizer rules.
+Existing VoiceBridge hackathon prototype and subsequent Streamlit adaptation. Do not count pre-hackathon code toward originality requirements. Organizer starter-template compliance and eligibility require confirmation.
