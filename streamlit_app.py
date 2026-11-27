@@ -32,6 +32,13 @@ def invite_code(con):
         if not con.execute("SELECT 1 FROM residents WHERE token=? UNION SELECT 1 FROM reverse_invites WHERE code=?",(code,code)).fetchone():
             return code
 
+def share_invite(code, role):
+    base=os.environ.get("VOICEBRIDGE_PUBLIC_URL","https://voicebridgesolutions.streamlit.app/")
+    link=base.rstrip("/")+"/?"+urlencode({"join":code,"role":role})
+    message="Join me on VoiceBridge. Connection code: "+code+" (valid for 3 minutes). Open: "+link
+    st.link_button("Share via WhatsApp","https://wa.me/?"+urlencode({"text":message}),use_container_width=True)
+    st.code(link,language=None)
+
 def speak(body):
     safe=json.dumps(body).replace("<","\\u003c")
     components.html('<button onclick="play()">Listen to message</button><script>function play(){if(window.speechSynthesis){speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance('+safe+'));}}</script>',height=45)
@@ -51,9 +58,13 @@ h1,h2,h3,p,label {color:#142d40;}
 st.markdown('<div class="vb-brand"><h1>VoiceBridge</h1><p>A simple way to ask for help and stay connected.</p></div>',unsafe_allow_html=True)
 if "access" not in st.session_state:
     st.session_state.access=st.query_params.get("join","").strip()
+    join_role=st.query_params.get("role","receiver")
     st.query_params.clear()
     with db() as con:
-        if not con.execute("SELECT 1 FROM residents WHERE token=? AND expires>?",(st.session_state.access,int(time.time()))).fetchone():
+        if join_role=="giver":
+            match=con.execute("SELECT groups.token FROM reverse_invites JOIN groups ON groups.id=reverse_invites.gid WHERE code=? AND expires>?",(st.session_state.access,int(time.time()))).fetchone()
+            st.session_state.access=match[0] if match else ""
+        elif not con.execute("SELECT 1 FROM residents WHERE token=? AND expires>?",(st.session_state.access,int(time.time()))).fetchone():
             st.session_state.access=""
 with db() as con:
     staff=con.execute("SELECT id,name FROM groups WHERE token=?",(st.session_state.access,)).fetchone()
@@ -151,7 +162,8 @@ if staff:
         else:
             st.caption("Invitation valid until "+time.strftime("%H:%M:%S UTC",time.gmtime(expires)))
         base=os.environ.get("VOICEBRIDGE_PUBLIC_URL","https://voicebridgesolutions.streamlit.app/")
-        st.code(base.rstrip("/")+"/?"+urlencode({"join":key}),language=None)
+        if expires>time.time():
+            share_invite(key,"receiver")
         st.caption("Or enter this code on the assistance screen:")
         st.code(key,language=None)
         st.caption("Anyone with this invitation can access this conversation. Share privately.")
@@ -167,6 +179,7 @@ else:
         with st.expander("Your connection code — share with caregiver",expanded=True):
             if invitation[1]>time.time():
                 st.code(invitation[0],language=None)
+                share_invite(invitation[0],"giver")
                 st.caption("Valid until "+time.strftime("%H:%M:%S UTC",time.gmtime(invitation[1])))
             else:
                 st.warning("Connection code expired.")
