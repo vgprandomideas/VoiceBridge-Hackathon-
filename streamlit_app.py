@@ -17,6 +17,7 @@ def db():
         con.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, rid TEXT, sender TEXT, body TEXT, status TEXT DEFAULT 'New')")
         if "expires" not in [r[1] for r in con.execute("PRAGMA table_info(residents)")]:
             con.execute("ALTER TABLE residents ADD COLUMN expires INTEGER NOT NULL DEFAULT 0")
+        con.execute("CREATE TABLE IF NOT EXISTS reverse_invites (code TEXT PRIMARY KEY, gid TEXT, expires INTEGER)")
         yield con
         con.commit()
     finally:
@@ -28,7 +29,7 @@ def token():
 def invite_code(con):
     while True:
         code="".join(secrets.choice("ABCDEFGHJKLMNPQRSTUVWXYZ23456789") for _ in range(10))
-        if not con.execute("SELECT 1 FROM residents WHERE token=?",(code,)).fetchone():
+        if not con.execute("SELECT 1 FROM residents WHERE token=? UNION SELECT 1 FROM reverse_invites WHERE code=?",(code,code)).fetchone():
             return code
 
 def speak(body):
@@ -85,7 +86,16 @@ if not staff and not resident:
                 else:
                     st.warning("Please enter a group name.")
     else:
-        st.write("Ask your caregiver for your private code. Enter it below to start talking.")
+        st.write("Create a code to share with your helper, or enter a code they sent.")
+        if st.button("Create connection code",type="primary",use_container_width=True):
+            gid,staffkey,rid,reskey=token(),token(),token(),token()
+            with db() as con:
+                con.execute("INSERT INTO groups VALUES (?,?,?)",(gid,"Quick connection",staffkey))
+                con.execute("INSERT INTO residents (id,gid,name,token,expires) VALUES (?,?,?,?,?)",(rid,gid,"Assistance receiver",reskey,0))
+                code=invite_code(con)
+                con.execute("INSERT INTO reverse_invites VALUES (?,?,?)",(code,gid,int(time.time())+180))
+            st.session_state.access=reskey
+            st.rerun()
     with st.form("connect"):
         access=st.text_input("Enter your connection code",placeholder="Paste the code here")
         if st.form_submit_button("Connect",use_container_width=True):
@@ -95,6 +105,12 @@ if not staff and not resident:
                 if table=="residents":
                     candidate=re.sub(r"[\\s-]","",candidate).upper() if len(re.sub(r"[\\s-]","",candidate))==10 else candidate
                 valid=con.execute("SELECT id FROM residents WHERE token=? AND expires>?",(candidate,int(time.time()))).fetchone() if table=="residents" else con.execute("SELECT id FROM groups WHERE token=?",(candidate,)).fetchone()
+            if not valid and table=="groups":
+                with db() as con:
+                    match=con.execute("SELECT groups.token FROM reverse_invites JOIN groups ON groups.id=reverse_invites.gid WHERE code=? AND expires>?",(re.sub(r"[\\s-]","",candidate).upper(),int(time.time()))).fetchone()
+                if match:
+                    candidate=match[0]
+                    valid=True
             if valid:
                 st.session_state.access=candidate
                 st.rerun()
@@ -145,6 +161,20 @@ else:
     st.header("Hello, "+name)
     st.write("Send a message to your caregiver below.")
     sender="Resident"
+    with db() as con:
+        invitation=con.execute("SELECT code,expires FROM reverse_invites WHERE gid=? ORDER BY expires DESC LIMIT 1",(gid,)).fetchone()
+    if invitation:
+        with st.expander("Your connection code — share with caregiver",expanded=True):
+            if invitation[1]>time.time():
+                st.code(invitation[0],language=None)
+                st.caption("Valid until "+time.strftime("%H:%M:%S UTC",time.gmtime(invitation[1])))
+            else:
+                st.warning("Connection code expired.")
+            if st.button("Create fresh connection code",use_container_width=True):
+                with db() as con:
+                    con.execute("DELETE FROM reverse_invites WHERE gid=?",(gid,))
+                    con.execute("INSERT INTO reverse_invites VALUES (?,?,?)",(invite_code(con),gid,int(time.time())+180))
+                st.rerun()
 
 @st.fragment(run_every=0.5)
 def conversation():
