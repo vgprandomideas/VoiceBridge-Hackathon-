@@ -1,0 +1,20 @@
+name: Prototype verification
+on: [push, workflow_dispatch]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --check src/index.js && node --test tests/care-group.test.mjs
+      - run: docker compose up -d --build
+      - run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:3000/api/health && curl -fsS http://localhost:3000/ -o /tmp/home.html && grep -qi VoiceBridge /tmp/home.html; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+      - if: always()
+        run: docker compose logs && docker compose down
