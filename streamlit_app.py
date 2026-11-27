@@ -64,7 +64,15 @@ if not staff and not resident:
     st.subheader("How can we help you?")
     role=st.radio("Choose your role",["I need assistance","I'm a caregiver"],horizontal=False)
     if role=="I'm a caregiver":
-        st.write("Create a group for the people you care for, or reconnect to an existing group.")
+        st.write("Create a code and share it with the person you want to help.")
+        if st.button("Create connection code",type="primary",use_container_width=True):
+            gid,key=token(),token()
+            with db() as con:
+                con.execute("INSERT INTO groups VALUES (?,?,?)",(gid,"Quick connection",key))
+                con.execute("INSERT INTO residents (id,gid,name,token,expires) VALUES (?,?,?,?,?)",(token(),gid,"Assistance receiver",invite_code(con),int(time.time())+180))
+            st.session_state.access=key
+            st.rerun()
+        st.caption("For multiple people, create a care group below.")
         with st.form("create"):
             name=st.text_input("Name of your care group",placeholder="Example: Home care")
             if st.form_submit_button("Create a care group",type="primary",use_container_width=True):
@@ -116,8 +124,8 @@ if staff:
         st.stop()
     selected=st.selectbox("Who would you like to talk to?",people,format_func=lambda x:x[1])
     rid,_,key,expires=selected
-    with st.expander("Invite this person",expanded=True):
-        if st.button("Generate fresh 3-minute invitation",use_container_width=True):
+    with st.expander("Your connection code — share with receiver",expanded=True):
+        if st.button("Renew connection code (3 minutes)",use_container_width=True):
             with db() as con:
                 con.execute("UPDATE residents SET expires=? WHERE id=? AND gid=?",(int(time.time())+180,rid,gid))
             st.rerun()
