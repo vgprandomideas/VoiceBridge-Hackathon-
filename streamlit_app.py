@@ -124,7 +124,7 @@ else:
     st.write("Send a message to your caregiver below.")
     sender="Resident"
 
-@st.fragment(run_every=3)
+@st.fragment(run_every=0.5)
 def conversation():
     with db() as con:
         rows=con.execute("SELECT id,sender,body,status FROM messages WHERE rid=? ORDER BY id DESC LIMIT 50",(rid,)).fetchall()
