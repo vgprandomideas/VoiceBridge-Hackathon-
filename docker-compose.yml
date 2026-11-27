@@ -5,7 +5,5 @@ services:
       - "3000:3000"
     volumes:
       - voicebridge-data:/data
-    environment:
-      WRANGLER_SEND_METRICS: 'false'
 volumes:
   voicebridge-data:
