@@ -5,6 +5,7 @@ import streamlit.components.v1 as components
 import json
 from urllib.parse import urlencode
 import re
+import time
 
 st.set_page_config(page_title="VoiceBridge", page_icon="🎙️", layout="centered")
 @contextmanager
@@ -14,6 +15,8 @@ def db():
         con.execute("CREATE TABLE IF NOT EXISTS groups (id TEXT PRIMARY KEY, name TEXT, token TEXT UNIQUE)")
         con.execute("CREATE TABLE IF NOT EXISTS residents (id TEXT PRIMARY KEY, gid TEXT, name TEXT, token TEXT UNIQUE)")
         con.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, rid TEXT, sender TEXT, body TEXT, status TEXT DEFAULT 'New')")
+        if "expires" not in [r[1] for r in con.execute("PRAGMA table_info(residents)")]:
+            con.execute("ALTER TABLE residents ADD COLUMN expires INTEGER NOT NULL DEFAULT 0")
         yield con
         con.commit()
     finally:
@@ -48,6 +51,9 @@ st.markdown('<div class="vb-brand"><h1>VoiceBridge</h1><p>A simple way to ask fo
 if "access" not in st.session_state:
     st.session_state.access=st.query_params.get("join","").strip()
     st.query_params.clear()
+    with db() as con:
+        if not con.execute("SELECT 1 FROM residents WHERE token=? AND expires>?",(st.session_state.access,int(time.time()))).fetchone():
+            st.session_state.access=""
 with db() as con:
     staff=con.execute("SELECT id,name FROM groups WHERE token=?",(st.session_state.access,)).fetchone()
     resident=con.execute("SELECT id,gid,name FROM residents WHERE token=?",(st.session_state.access,)).fetchone()
@@ -80,7 +86,7 @@ if not staff and not resident:
                 candidate=access.strip()
                 if table=="residents":
                     candidate=re.sub(r"[\\s-]","",candidate).upper() if len(re.sub(r"[\\s-]","",candidate))==10 else candidate
-                valid=con.execute("SELECT id FROM "+table+" WHERE token=?",(candidate,)).fetchone()
+                valid=con.execute("SELECT id FROM residents WHERE token=? AND expires>?",(candidate,int(time.time()))).fetchone() if table=="residents" else con.execute("SELECT id FROM groups WHERE token=?",(candidate,)).fetchone()
             if valid:
                 st.session_state.access=candidate
                 st.rerun()
@@ -102,16 +108,24 @@ if staff:
         name=st.text_input("Name of the person you help")
         if st.form_submit_button("Add person",use_container_width=True) and name.strip():
             with db() as con:
-                con.execute("INSERT INTO residents VALUES (?,?,?,?)",(token(),gid,name.strip()[:80],invite_code(con)))
+                con.execute("INSERT INTO residents (id,gid,name,token,expires) VALUES (?,?,?,?,?)",(token(),gid,name.strip()[:80],invite_code(con),int(time.time())+180))
     with db() as con:
-        people=con.execute("SELECT id,name,token FROM residents WHERE gid=?",(gid,)).fetchall()
+        people=con.execute("SELECT id,name,token,expires FROM residents WHERE gid=?",(gid,)).fetchall()
     if not people:
         st.info("Enter a name above and tap Add person to create their invitation.")
         st.stop()
     selected=st.selectbox("Who would you like to talk to?",people,format_func=lambda x:x[1])
-    rid,_,key=selected
+    rid,_,key,expires=selected
     with st.expander("Invite this person",expanded=True):
-        st.write("Share this private link or connection code with the person you help.")
+        if st.button("Generate fresh 3-minute invitation",use_container_width=True):
+            with db() as con:
+                con.execute("UPDATE residents SET expires=? WHERE id=? AND gid=?",(int(time.time())+180,rid,gid))
+            st.rerun()
+        st.write("Invitation expires 3 minutes after generation. Existing conversations remain active.")
+        if expires<=time.time():
+            st.warning("Invitation expired. Generate a fresh invitation above.")
+        else:
+            st.caption("Invitation valid until "+time.strftime("%H:%M:%S UTC",time.gmtime(expires)))
         base=os.environ.get("VOICEBRIDGE_PUBLIC_URL","https://voicebridgesolutions.streamlit.app/")
         st.code(base.rstrip("/")+"/?"+urlencode({"join":key}),language=None)
         st.caption("Or enter this code on the assistance screen:")
