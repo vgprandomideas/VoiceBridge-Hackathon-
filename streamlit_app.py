@@ -264,7 +264,10 @@ st.markdown("**Choose your communication method**")
 method=st.radio("Input method",["Type a message","Dictate with Wispr Flow","Record original voice"],horizontal=False,key="input_method")
 if method=="Dictate with Wispr Flow":
     st.link_button("Open Wispr Flow","https://wisprflow.ai/",use_container_width=True)
-    st.caption("Activate Wispr Flow on your device, select the message box and dictate.")
+    st.caption("Tap the message field below, then activate Flow using your device controls.")
+    with st.expander("Connect Wispr Flow on your device",expanded=True):
+        st.markdown("**Android:** Tap the message field, then the Flow Bubble. **iPhone:** Switch to the Flow keyboard and tap its microphone. **Windows:** Hold Ctrl + Win. **Mac:** Hold Fn (or your configured shortcut). Finish dictating and review the inserted text.")
+        st.link_button("Setup and troubleshooting","https://docs.wisprflow.ai/articles/6409258247-starting-your-first-dictation")
 st.write("Tap the message box, activate Wispr Flow on your device and speak at your own pace. Review your words before sending.")
 with st.expander("How to use Wispr Flow"):
     st.write("1. Install and enable Wispr Flow on a supported device.\n\n2. Select the message box below.\n\n3. Activate Flow using your configured shortcut or supported keyboard.\n\n4. Finish dictating, review the text and tap Send message.")
