@@ -3,6 +3,8 @@ import sqlite3, secrets, os
 from contextlib import contextmanager
 import streamlit.components.v1 as components
 import json
+from urllib.parse import urlencode
+import re
 
 st.set_page_config(page_title="VoiceBridge", page_icon="🎙️", layout="centered")
 @contextmanager
@@ -19,6 +21,12 @@ def db():
 
 def token():
     return secrets.token_urlsafe(32)
+
+def invite_code(con):
+    while True:
+        code="".join(secrets.choice("ABCDEFGHJKLMNPQRSTUVWXYZ23456789") for _ in range(10))
+        if not con.execute("SELECT 1 FROM residents WHERE token=?",(code,)).fetchone():
+            return code
 
 def speak(body):
     safe=json.dumps(body).replace("<","\\u003c")
@@ -38,11 +46,15 @@ h1,h2,h3,p,label {color:#142d40;}
 </style>""",unsafe_allow_html=True)
 st.markdown('<div class="vb-brand"><h1>VoiceBridge</h1><p>A simple way to ask for help and stay connected.</p></div>',unsafe_allow_html=True)
 if "access" not in st.session_state:
-    st.session_state.access=""
+    st.session_state.access=st.query_params.get("join","").strip()
+    st.query_params.clear()
 with db() as con:
     staff=con.execute("SELECT id,name FROM groups WHERE token=?",(st.session_state.access,)).fetchone()
     resident=con.execute("SELECT id,gid,name FROM residents WHERE token=?",(st.session_state.access,)).fetchone()
 if not staff and not resident:
+    if st.session_state.access:
+        st.warning("This invitation is no longer available. Ask your caregiver for a new one.")
+        st.session_state.access=""
     st.subheader("How can we help you?")
     role=st.radio("Choose your role",["I need assistance","I'm a caregiver"],horizontal=False)
     if role=="I'm a caregiver":
@@ -61,13 +73,16 @@ if not staff and not resident:
     else:
         st.write("Ask your caregiver for your private code. Enter it below to start talking.")
     with st.form("connect"):
-        access=st.text_input("Your private code",type="password")
+        access=st.text_input("Enter your connection code",placeholder="Paste the code here")
         if st.form_submit_button("Connect",use_container_width=True):
             with db() as con:
                 table="groups" if role=="I'm a caregiver" else "residents"
-                valid=con.execute("SELECT id FROM "+table+" WHERE token=?",(access.strip(),)).fetchone()
+                candidate=access.strip()
+                if table=="residents":
+                    candidate=re.sub(r"[\\s-]","",candidate).upper() if len(re.sub(r"[\\s-]","",candidate))==10 else candidate
+                valid=con.execute("SELECT id FROM "+table+" WHERE token=?",(candidate,)).fetchone()
             if valid:
-                st.session_state.access=access.strip()
+                st.session_state.access=candidate
                 st.rerun()
             else:
                 st.error("Code not recognized. Check it with your caregiver.")
@@ -75,26 +90,33 @@ if not staff and not resident:
     st.stop()
 if st.button("Disconnect"):
     st.session_state.access=""
+    st.query_params.clear()
     st.rerun()
 if staff:
     gid,name=staff
-    st.header("Your care group: "+name)
+    st.header("People you help")
+    st.caption(name)
     with st.expander("Caregiver access code"):
         st.code(st.session_state.access)
     with st.form("add"):
-        name=st.text_input("Resident name")
-        if st.form_submit_button("Add resident") and name.strip():
+        name=st.text_input("Name of the person you help")
+        if st.form_submit_button("Add person",use_container_width=True) and name.strip():
             with db() as con:
-                con.execute("INSERT INTO residents VALUES (?,?,?,?)",(token(),gid,name.strip()[:80],token()))
+                con.execute("INSERT INTO residents VALUES (?,?,?,?)",(token(),gid,name.strip()[:80],invite_code(con)))
     with db() as con:
         people=con.execute("SELECT id,name,token FROM residents WHERE gid=?",(gid,)).fetchall()
     if not people:
-        st.info("Add a resident to start communicating.")
+        st.info("Enter a name above and tap Add person to create their invitation.")
         st.stop()
     selected=st.selectbox("Who would you like to talk to?",people,format_func=lambda x:x[1])
     rid,_,key=selected
-    with st.expander("Private resident invitation code"):
-        st.code(key)
+    with st.expander("Invite this person",expanded=True):
+        st.write("Share this private link or connection code with the person you help.")
+        base=os.environ.get("VOICEBRIDGE_PUBLIC_URL","https://voicebridgesolutions.streamlit.app/")
+        st.code(base.rstrip("/")+"/?"+urlencode({"join":key}),language=None)
+        st.caption("Or enter this code on the assistance screen:")
+        st.code(key,language=None)
+        st.caption("Anyone with this invitation can access this conversation. Share privately.")
     sender="Caregiver"
 else:
     rid,gid,name=resident
@@ -116,7 +138,6 @@ def conversation():
                     with db() as con:
                         con.execute("UPDATE messages SET status='Acknowledged' WHERE id=? AND rid=?",(mid,rid))
                     st.rerun(scope="fragment")
-conversation()
 st.subheader("What would you like to say?")
 draft_key="draft_"+rid
 if st.session_state.pop("clear_draft_"+rid,False):
@@ -133,4 +154,5 @@ if st.button("Send message",type="primary",use_container_width=True) and body.st
         con.execute("INSERT INTO messages (rid,sender,body) VALUES (?,?,?)",(rid,sender,body.strip()))
     st.session_state["clear_draft_"+rid]=True
     st.rerun()
+conversation()
 st.caption("Browser speech playback depends on device support. Translation and automatic transcription are not included in this Streamlit edition. Local SQLite data may be lost on cloud restarts.")
