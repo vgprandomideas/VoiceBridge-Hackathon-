@@ -213,6 +213,10 @@ else:
                     con.execute("INSERT INTO reverse_invites VALUES (?,?,?)",(invite_code(con),gid,int(time.time())+180))
                 st.rerun()
 
+blind=st.checkbox("Accessible mode — larger text and spoken guidance")
+if blind:
+    st.markdown("<style>.stApp p,.stApp label,.stApp button,.stApp textarea{font-size:1.35rem!important}</style>",unsafe_allow_html=True)
+    speak("Choose your language, enter or record a message, then press Send.")
 preferred=st.selectbox("Read and listen in your preferred language",list(LANGUAGES),key="preferred_language")
 target=LANGUAGES[preferred]
 allow_translation=st.checkbox("Translate incoming messages automatically (sends text to external translation service)",value=True)
@@ -277,14 +281,28 @@ draft_key="draft_"+rid
 if st.session_state.pop("clear_draft_"+rid,False):
     st.session_state[draft_key]=""
 phrases=["I need water","I need food","Please help me","I feel unwell","I need the toilet","Thank you"] if resident else ["I am coming","How can I help?","Please wait","I understand"]
+symbols={"I need water":"💧","I need food":"🍽️","Please help me":"🤝","I feel unwell":"🩹","I need the toilet":"🚻","Thank you":"🙏","I am coming":"🚶","How can I help?":"🤝","Please wait":"⏳","I understand":"✓"}
 for i,phrase in enumerate(phrases):
     if i%2==0:
         cols=st.columns(2)
-    if cols[i%2].button(phrase,use_container_width=True):
+    if cols[i%2].button(symbols.get(phrase,"")+" "+phrase,use_container_width=True):
         st.session_state[draft_key]=phrase
+if "pending_transcript_"+rid in st.session_state:
+    st.session_state[draft_key]=st.session_state.pop("pending_transcript_"+rid)
 body=st.text_area("Message — type or dictate with Wispr Flow",key=draft_key,max_chars=700)
 recording=st.audio_input("Record your original voice",key="record_"+rid+"_"+str(st.session_state.get("record_version_"+rid,0)))
 if recording:
+    if os.environ.get("OPENAI_API_KEY"):
+        if st.button("Transcribe recording",use_container_width=True):
+            try:
+                response=requests.post("https://api.openai.com/v1/audio/transcriptions",headers={"Authorization":"Bearer "+os.environ["OPENAI_API_KEY"]},files={"file":("voice.wav",recording.getvalue(),"audio/wav")},data={"model":"whisper-1"},timeout=60)
+                response.raise_for_status()
+                st.session_state["pending_transcript_"+rid]=response.json()["text"]
+                st.rerun()
+            except Exception:
+                st.error("Transcription unavailable. Use Wispr Flow or type the transcript.")
+    else:
+        st.caption("Automatic transcription: optional API key not configured. Wispr Flow and original audio remain available.")
     st.caption("Review your recording before sending. You can add text using Wispr Flow.")
 if recording and not body.strip():
     st.info("For translation, add a transcript using Wispr Flow or type the message. You can also send original audio alone.")
