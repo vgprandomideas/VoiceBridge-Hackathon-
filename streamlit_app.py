@@ -137,11 +137,11 @@ if not staff and not resident:
                 table="groups" if role=="I'm a caregiver" else "residents"
                 candidate=access.strip()
                 if table=="residents":
-                    candidate=re.sub(r"[\\s-]","",candidate).upper() if len(re.sub(r"[\\s-]","",candidate))==10 else candidate
+                    candidate=re.sub(r"[\s-]","",candidate).upper() if len(re.sub(r"[\s-]","",candidate))==10 else candidate
                 valid=con.execute("SELECT id FROM residents WHERE token=? AND expires>?",(candidate,int(time.time()))).fetchone() if table=="residents" else con.execute("SELECT id FROM groups WHERE token=?",(candidate,)).fetchone()
             if not valid and table=="groups":
                 with db() as con:
-                    match=con.execute("SELECT groups.token FROM reverse_invites JOIN groups ON groups.id=reverse_invites.gid WHERE code=? AND expires>?",(re.sub(r"[\\s-]","",candidate).upper(),int(time.time()))).fetchone()
+                    match=con.execute("SELECT groups.token FROM reverse_invites JOIN groups ON groups.id=reverse_invites.gid WHERE code=? AND expires>?",(re.sub(r"[\s-]","",candidate).upper(),int(time.time()))).fetchone()
                 if match:
                     candidate=match[0]
                     valid=True
@@ -218,9 +218,18 @@ allow_translation=st.checkbox("Translate incoming messages automatically (sends 
 st.caption("Demo data only. Translation can be inaccurate; confirm important requests.")
 
 @st.fragment(run_every=0.5)
+def inbox_status():
+    with db() as con:
+        latest=con.execute("SELECT COALESCE(MAX(id),0) FROM messages WHERE rid=?",(rid,)).fetchone()[0]
+    if latest>st.session_state.get("seen_"+rid,0):
+        st.info("New message available — tap Refresh conversation below.")
+    else:
+        st.caption("Listening for new messages…")
+
 def conversation():
     with db() as con:
         rows=con.execute("SELECT id,sender,body,status,audio FROM messages WHERE rid=? ORDER BY id DESC LIMIT 50",(rid,)).fetchall()
+    st.session_state["seen_"+rid]=max([r[0] for r in rows],default=0)
     for mid,who,body,status,audio in reversed(rows):
         with st.chat_message("user" if who==sender else "assistant"):
             st.text(who+" · "+status)
@@ -239,7 +248,7 @@ def conversation():
                         st.caption("Translation unavailable. Original text shown.")
                         if st.button("Retry translation",key="retry_"+str(mid)):
                             st.session_state.pop(attempt,None)
-                            st.rerun(scope="fragment")
+                            st.rerun()
                 else:
                     speak(body,target)
             if audio:
@@ -248,7 +257,7 @@ def conversation():
                 if st.button("Acknowledge",key="ack"+str(mid)):
                     with db() as con:
                         con.execute("UPDATE messages SET status='Acknowledged' WHERE id=? AND rid=?",(mid,rid))
-                    st.rerun(scope="fragment")
+                    st.rerun()
 st.subheader("What would you like to say?")
 st.markdown("**Speak with Wispr Flow**")
 st.write("Tap the message box, activate Wispr Flow on your device and speak at your own pace. Review your words before sending.")
@@ -269,6 +278,8 @@ body=st.text_area("Message — type or dictate with Wispr Flow",key=draft_key,ma
 recording=st.audio_input("Record your original voice",key="record_"+rid+"_"+str(st.session_state.get("record_version_"+rid,0)))
 if recording:
     st.caption("Review your recording before sending. You can add text using Wispr Flow.")
+if recording and not body.strip():
+    st.info("For translation, add a transcript using Wispr Flow or type the message. You can also send original audio alone.")
 if st.button("Send message",type="primary",use_container_width=True) and (body.strip() or recording):
     audio=recording.getvalue() if recording else None
     if audio and len(audio)>8*1024*1024:
@@ -279,6 +290,8 @@ if st.button("Send message",type="primary",use_container_width=True) and (body.s
     st.session_state["record_version_"+rid]=st.session_state.get("record_version_"+rid,0)+1
     st.session_state["clear_draft_"+rid]=True
     st.rerun()
+inbox_status()
+st.button("Refresh conversation",use_container_width=True)
 conversation()
 st.caption("Original voice recordings are shared within this private conversation. Use demonstration data only.")
 st.caption("Browser speech playback depends on device support. Automatic text translation uses an external experimental service. Audio-only messages require a Wispr transcript for translation. Local SQLite data may be lost on cloud restarts.")
