@@ -6,6 +6,7 @@ import json
 from urllib.parse import urlencode
 import re
 import time
+import requests
 
 st.set_page_config(page_title="VoiceBridge", page_icon="🎙️", layout="centered")
 @contextmanager
@@ -20,6 +21,7 @@ def db():
         con.execute("CREATE TABLE IF NOT EXISTS reverse_invites (code TEXT PRIMARY KEY, gid TEXT, expires INTEGER)")
         if "audio" not in [r[1] for r in con.execute("PRAGMA table_info(messages)")]:
             con.execute("ALTER TABLE messages ADD COLUMN audio BLOB")
+        con.execute("CREATE TABLE IF NOT EXISTS translations (mid INTEGER, lang TEXT, body TEXT, PRIMARY KEY(mid,lang))")
         yield con
         con.commit()
     finally:
@@ -41,9 +43,28 @@ def share_invite(code, role):
     st.link_button("Share via WhatsApp","https://wa.me/?"+urlencode({"text":message}),use_container_width=True)
     st.code(link,language=None)
 
-def speak(body):
+LANGUAGES={"English":"en","Tamil — தமிழ்":"ta","Hindi — हिन्दी":"hi","Telugu — తెలుగు":"te","Malayalam — മലയാളം":"ml","Kannada — ಕನ್ನಡ":"kn","Bengali — বাংলা":"bn","Marathi — मराठी":"mr","Gujarati — ગુજરાતી":"gu","Punjabi — ਪੰਜਾਬੀ":"pa","Odia — ଓଡ଼ିଆ":"or","Urdu — اردو":"ur","Assamese — অসমীয়া":"as"}
+
+def translate_message(mid, body, target):
+    with db() as con:
+        row=con.execute("SELECT body FROM translations WHERE mid=? AND lang=?",(mid,target)).fetchone()
+    if row:
+        return row[0]
+    try:
+        response=requests.get("https://translate.googleapis.com/translate_a/single",params={"client":"gtx","sl":"auto","tl":target,"dt":"t","q":body},timeout=4)
+        response.raise_for_status()
+        translated="".join(part[0] or "" for part in response.json()[0])
+        if not translated:
+            return None
+        with db() as con:
+            con.execute("INSERT OR REPLACE INTO translations VALUES (?,?,?)",(mid,target,translated))
+        return translated
+    except Exception:
+        return None
+
+def speak(body, lang="en"):
     safe=json.dumps(body).replace("<","\\u003c")
-    components.html('<button onclick="play()">Listen to message</button><script>function play(){if(window.speechSynthesis){speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance('+safe+'));}}</script>',height=45)
+    components.html('<button onclick="play()">Listen to message</button><script>function play(){if(window.speechSynthesis){speechSynthesis.cancel();let u=new SpeechSynthesisUtterance('+safe+');u.lang='+json.dumps(lang+"-IN")+';speechSynthesis.speak(u);}}</script>',height=45)
 
 st.markdown("""<style>
 .stApp {background: radial-gradient(ellipse at 90% 0%, #dcefeb 0%, transparent 45%), linear-gradient(145deg,#f7fafc,#edf3f8); color:#142d40;}
@@ -191,6 +212,11 @@ else:
                     con.execute("INSERT INTO reverse_invites VALUES (?,?,?)",(invite_code(con),gid,int(time.time())+180))
                 st.rerun()
 
+preferred=st.selectbox("Read and listen in your preferred language",list(LANGUAGES),key="preferred_language")
+target=LANGUAGES[preferred]
+allow_translation=st.checkbox("Translate incoming messages automatically (sends text to external translation service)",value=True)
+st.caption("Demo data only. Translation can be inaccurate; confirm important requests.")
+
 @st.fragment(run_every=0.5)
 def conversation():
     with db() as con:
@@ -200,7 +226,22 @@ def conversation():
             st.text(who+" · "+status)
             if body:
                 st.text(body)
-                speak(body)
+                if who!=sender and allow_translation:
+                    attempt="translated_"+str(mid)+"_"+target
+                    if attempt not in st.session_state:
+                        st.session_state[attempt]=translate_message(mid,body,target)
+                    translated=st.session_state[attempt]
+                    if translated:
+                        st.caption("Translation · "+preferred)
+                        st.text(translated)
+                        speak(translated,target)
+                    else:
+                        st.caption("Translation unavailable. Original text shown.")
+                        if st.button("Retry translation",key="retry_"+str(mid)):
+                            st.session_state.pop(attempt,None)
+                            st.rerun(scope="fragment")
+                else:
+                    speak(body,target)
             if audio:
                 st.audio(audio,format="audio/wav")
             if staff and who=="Resident" and status=="New":
@@ -240,4 +281,4 @@ if st.button("Send message",type="primary",use_container_width=True) and (body.s
     st.rerun()
 conversation()
 st.caption("Original voice recordings are shared within this private conversation. Use demonstration data only.")
-st.caption("Browser speech playback depends on device support. Translation and automatic transcription are not included in this Streamlit edition. Local SQLite data may be lost on cloud restarts.")
+st.caption("Browser speech playback depends on device support. Automatic text translation uses an external experimental service. Audio-only messages require a Wispr transcript for translation. Local SQLite data may be lost on cloud restarts.")
