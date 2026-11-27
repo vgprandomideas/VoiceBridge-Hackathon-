@@ -227,7 +227,10 @@ def inbox_status():
     with db() as con:
         latest=con.execute("SELECT COALESCE(MAX(id),0) FROM messages WHERE rid=?",(rid,)).fetchone()[0]
     if latest>st.session_state.get("seen_"+rid,0):
-        st.info("New message available — tap Refresh conversation below.")
+        if st.session_state.get("auto_refresh",False):
+            st.rerun()
+        else:
+            st.info("New message available — tap Refresh conversation below.")
     else:
         st.caption("Listening for new messages…")
 
@@ -316,6 +319,7 @@ if st.button("Send message",type="primary",use_container_width=True) and (body.s
     st.session_state["record_version_"+rid]=st.session_state.get("record_version_"+rid,0)+1
     st.session_state["clear_draft_"+rid]=True
     st.rerun()
+st.checkbox("Automatically refresh incoming messages (may interrupt playback)",key="auto_refresh",value=True)
 inbox_status()
 st.button("Refresh conversation",use_container_width=True)
 conversation()
