@@ -18,6 +18,8 @@ def db():
         if "expires" not in [r[1] for r in con.execute("PRAGMA table_info(residents)")]:
             con.execute("ALTER TABLE residents ADD COLUMN expires INTEGER NOT NULL DEFAULT 0")
         con.execute("CREATE TABLE IF NOT EXISTS reverse_invites (code TEXT PRIMARY KEY, gid TEXT, expires INTEGER)")
+        if "audio" not in [r[1] for r in con.execute("PRAGMA table_info(messages)")]:
+            con.execute("ALTER TABLE messages ADD COLUMN audio BLOB")
         yield con
         con.commit()
     finally:
@@ -192,12 +194,15 @@ else:
 @st.fragment(run_every=0.5)
 def conversation():
     with db() as con:
-        rows=con.execute("SELECT id,sender,body,status FROM messages WHERE rid=? ORDER BY id DESC LIMIT 50",(rid,)).fetchall()
-    for mid,who,body,status in reversed(rows):
+        rows=con.execute("SELECT id,sender,body,status,audio FROM messages WHERE rid=? ORDER BY id DESC LIMIT 50",(rid,)).fetchall()
+    for mid,who,body,status,audio in reversed(rows):
         with st.chat_message("user" if who==sender else "assistant"):
             st.text(who+" · "+status)
-            st.write(body)
-            speak(body)
+            if body:
+                st.text(body)
+                speak(body)
+            if audio:
+                st.audio(audio,format="audio/wav")
             if staff and who=="Resident" and status=="New":
                 if st.button("Acknowledge",key="ack"+str(mid)):
                     with db() as con:
@@ -220,10 +225,19 @@ for i,phrase in enumerate(phrases):
     if cols[i%2].button(phrase,use_container_width=True):
         st.session_state[draft_key]=phrase
 body=st.text_area("Message — type or dictate with Wispr Flow",key=draft_key,max_chars=700)
-if st.button("Send message",type="primary",use_container_width=True) and body.strip():
+recording=st.audio_input("Record your original voice",key="record_"+rid+"_"+str(st.session_state.get("record_version_"+rid,0)))
+if recording:
+    st.caption("Review your recording before sending. You can add text using Wispr Flow.")
+if st.button("Send message",type="primary",use_container_width=True) and (body.strip() or recording):
+    audio=recording.getvalue() if recording else None
+    if audio and len(audio)>8*1024*1024:
+        st.error("Recording too large. Please record a shorter message.")
+        st.stop()
     with db() as con:
-        con.execute("INSERT INTO messages (rid,sender,body) VALUES (?,?,?)",(rid,sender,body.strip()))
+        con.execute("INSERT INTO messages (rid,sender,body,audio) VALUES (?,?,?,?)",(rid,sender,body.strip(),audio))
+    st.session_state["record_version_"+rid]=st.session_state.get("record_version_"+rid,0)+1
     st.session_state["clear_draft_"+rid]=True
     st.rerun()
 conversation()
+st.caption("Original voice recordings are shared within this private conversation. Use demonstration data only.")
 st.caption("Browser speech playback depends on device support. Translation and automatic transcription are not included in this Streamlit edition. Local SQLite data may be lost on cloud restarts.")
