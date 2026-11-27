@@ -5,14 +5,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-python@v5
         with:
-          node-version: 22
-      - run: node --check src/index.js && node --test tests/care-group.test.mjs
+          python-version: '3.12'
+      - run: python -m py_compile streamlit_app.py
       - run: docker compose up -d --build
       - run: |
           for i in $(seq 1 60); do
-            if curl -fsS http://localhost:3000/api/health && curl -fsS http://localhost:3000/ -o /tmp/home.html && grep -qi VoiceBridge /tmp/home.html; then exit 0; fi
+            if curl -fsS http://localhost:3000/_stcore/health; then exit 0; fi
             sleep 2
           done
           exit 1
