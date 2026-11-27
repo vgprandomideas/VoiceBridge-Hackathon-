@@ -25,12 +25,18 @@ def speak(body):
     components.html('<button onclick="play()">Listen to message</button><script>function play(){if(window.speechSynthesis){speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance('+safe+'));}}</script>',height=45)
 
 st.markdown("""<style>
-.stButton button {min-height: 3rem; font-size: 1.05rem; border-radius: 12px;}
-.stTextArea textarea {font-size: 1.1rem;}
-.block-container {max-width: 760px; padding-top: 2rem;}
+.stApp {background: radial-gradient(ellipse at 90% 0%, #dcefeb 0%, transparent 45%), linear-gradient(145deg,#f7fafc,#edf3f8); color:#142d40;}
+[data-testid="stHeader"] {background:transparent;}
+.block-container {max-width:760px;padding:2.5rem 1.4rem 3rem;}
+.stButton button, .stFormSubmitButton button {min-height:3.2rem;font-size:1.05rem;border-radius:12px;font-weight:600;}
+.stTextArea textarea {font-size:1.1rem;}
+[data-testid="stForm"], [data-testid="stChatMessage"] {background:#ffffff;border:1px solid #d7e3e9;border-radius:16px;padding:1rem;}
+h1,h2,h3,p,label {color:#142d40;}
+.vb-brand {background:linear-gradient(120deg,#102c43,#126c70);border-radius:20px;padding:28px;color:white;margin-bottom:24px;box-shadow:0 10px 30px #163c5020;}
+.vb-brand h1 {color:white;margin:0;font-size:2.2rem;}
+.vb-brand p {color:#e0f4f1;margin:8px 0 0;}
 </style>""",unsafe_allow_html=True)
-st.title("VoiceBridge")
-st.caption("A simple way to ask for help and stay connected.")
+st.markdown('<div class="vb-brand"><h1>VoiceBridge</h1><p>A simple way to ask for help and stay connected.</p></div>',unsafe_allow_html=True)
 if "access" not in st.session_state:
     st.session_state.access=""
 with db() as con:
