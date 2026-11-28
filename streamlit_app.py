@@ -275,8 +275,7 @@ if method=="Dictate with Wispr Flow":
     with st.expander("Connect Wispr Flow on your device",expanded=True):
         st.markdown("**Android:** Tap the message field, then the Flow Bubble. **iPhone:** Switch to the Flow keyboard and tap its microphone. **Windows:** Hold Ctrl + Win. **Mac:** Hold Fn (or your configured shortcut). Finish dictating and review the inserted text.")
         st.link_button("Setup and troubleshooting","https://docs.wisprflow.ai/articles/6409258247-starting-your-first-dictation")
-st.write("Tap the message box, activate Wispr Flow on your device and speak at your own pace. Review your words before sending.")
-with st.expander("How to use Wispr Flow"):
+with st.expander("Wispr Flow help (optional)"):
     st.write("1. Install and enable Wispr Flow on a supported device.\n\n2. Select the message box below.\n\n3. Activate Flow using your configured shortcut or supported keyboard.\n\n4. Finish dictating, review the text and tap Send message.")
     st.link_button("Get Wispr Flow","https://wisprflow.ai/")
     st.caption("VoiceBridge receives text through device-level dictation. No direct Wispr API connection is used. If Flow is unavailable, type or select a quick phrase.")
@@ -293,7 +292,7 @@ for i,phrase in enumerate(phrases):
 if "pending_transcript_"+rid in st.session_state:
     st.session_state[draft_key]=st.session_state.pop("pending_transcript_"+rid)
 body=st.text_area("Message — type or dictate with Wispr Flow",key=draft_key,max_chars=700)
-recording=st.audio_input("Record your original voice",key="record_"+rid+"_"+str(st.session_state.get("record_version_"+rid,0)))
+recording=st.audio_input("Record your original voice",key="record_"+rid+"_"+str(st.session_state.get("record_version_"+rid,0))) if method=="Record original voice" else None
 if recording:
     if os.environ.get("OPENAI_API_KEY"):
         if st.button("Transcribe recording",use_container_width=True):
@@ -319,9 +318,10 @@ if st.button("Send message",type="primary",use_container_width=True) and (body.s
     st.session_state["record_version_"+rid]=st.session_state.get("record_version_"+rid,0)+1
     st.session_state["clear_draft_"+rid]=True
     st.rerun()
-st.checkbox("Automatically refresh incoming messages (may interrupt playback)",key="auto_refresh",value=True)
+with st.expander("Conversation settings"):
+    st.checkbox("Automatically refresh incoming messages (may interrupt playback)",key="auto_refresh",value=True)
 inbox_status()
 st.button("Refresh conversation",use_container_width=True)
 conversation()
-st.caption("Original voice recordings are shared within this private conversation. Use demonstration data only.")
+st.caption("Use demonstration data only. Share connection codes privately.")
 st.caption("Browser speech playback depends on device support. Automatic text translation uses an external experimental service. Audio-only messages require a Wispr transcript for translation. Local SQLite data may be lost on cloud restarts.")
