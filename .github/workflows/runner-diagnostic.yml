@@ -1,0 +1,13 @@
+name: Runner diagnostic
+on: [push, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - run: echo Runner-working
